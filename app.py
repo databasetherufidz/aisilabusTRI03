@@ -260,34 +260,32 @@ if "rpp_cache" not in st.session_state:
 # Tombol 1: Buat Silabus Saja (Teks Penuh Tanpa Batas Karakter)
 # ---------------------------------------------------------
 if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"):
-  final_text = ""
-  if metode_input == "📁 Upload File PDF":
-    if not uploaded_pdf:
-      st.error("Harap unggah berkas PDF kitab terlebih dahulu.")
-      st.stop()
-    with st.spinner("Membaca dan menganalisis seluruh halaman PDF..."):
-      final_text = extract_text_from_pdf(uploaded_pdf, page_range_input)
-      if not final_text.strip():
-        st.error("Teks pada PDF tidak terbaca.")
-        st.stop()
-  else:
-    if not kitab_text_input.strip():
-      st.error("Harap masukkan teks kitab terlebih dahulu.")
-      st.stop()
-    final_text = kitab_text_input
+    final_text = ""
+    if metode_input == "📁 Upload File PDF":
+        if not uploaded_pdf:
+            st.error("Harap unggah berkas PDF kitab terlebih dahulu.")
+            st.stop()
+        with st.spinner("Membaca dan menganalisis seluruh halaman PDF..."):
+            final_text = extract_text_from_pdf(uploaded_pdf, page_range_input)
+            if not final_text.strip():
+                st.error("Teks pada PDF tidak terbaca.")
+                st.stop()
+    else:
+        if not kitab_text_input.strip():
+            st.error("Harap masukkan teks kitab terlebih dahulu.")
+            st.stop()
+        final_text = kitab_text_input
 
-  st.session_state["pdf_text"] = final_text
-  st.session_state["nama_kitab"] = nama_kitab
-  st.session_state["fan_ilmu"] = fan_ilmu
-  st.session_state["tingkat_kelas"] = tingkat_kelas
-  st.session_state["total_pertemuan"] = total_pertemuan_input
-  st.session_state["alokasi_waktu"] = alokasi_waktu_input
-  st.session_state["rpp_cache"] = {}  # Reset cache rpp
+    st.session_state["pdf_text"] = final_text
+    st.session_state["nama_kitab"] = nama_kitab
+    st.session_state["fan_ilmu"] = fan_ilmu
+    st.session_state["tingkat_kelas"] = tingkat_kelas
+    st.session_state["total_pertemuan"] = total_pertemuan_input
+    st.session_state["alokasi_waktu"] = alokasi_waktu_input
+    st.session_state["rpp_cache"] = {}  # Reset cache rpp
 
-  with st.spinner(
-      "Gemini AI sedang menyusun Silabus dari seluruh teks kitab..."
-  ):
-    prompt = f"""
+    with st.spinner("Gemini AI sedang menyusun Silabus dari seluruh teks kitab..."):
+        prompt = f"""
         Anda adalah seorang pakar kurikulum madrasah/pesantren.
         Buatkan pemetaan Silabus secara lengkap dan proporsional untuk seluruh pertemuan dari teks kitab di bawah ini.
         
@@ -322,59 +320,54 @@ if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"
         }}
         """
 
-    # Mekanisme Coba Ulang (Retry) untuk mengatasi error 503 jika server sibuk
-    import time
+        import time
 
-    max_retries = 3
-    retry_delay = 2
-    success = False
+        max_retries = 3
+        retry_delay = 2
+        success = False
+        response = None
 
-    for attempt in range(max_retries):
-      try:
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=8192, temperature=0.7
-            ),
-        )
-        success = True
-        break
-      except Exception as e:
-        if "503" in str(e) and attempt < max_retries - 1:
-          time.sleep(retry_delay)
-          retry_delay *= 2
-          continue
-        else:
-          st.error(f"Gagal memproses AI / JSON: {str(e)}")
-          break
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=8192, temperature=0.7
+                    ),
+                )
+                success = True
+                break
+            except Exception as e:
+                if "503" in str(e) and attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    st.error(f"Gagal memproses AI / JSON: {str(e)}")
+                    break
 
-   if success:
-      try:
-        raw_text = response.text.strip()
+        if success and response:
+            try:
+                raw_text = response.text.strip()
 
-        # Membersihkan blok markdown backticks jika ada
-        if "```json" in raw_text:
-          raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in raw_text:
-          raw_text = raw_text.split("```")[1].split("```")[0].strip()
+                if "```json" in raw_text:
+                    raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in raw_text:
+                    raw_text = raw_text.split("```")[1].split("```")[0].strip()
 
-        # Membersihkan teks tambahan di luar kurung kurawal pembuka/penutup JSON
-        start_idx = raw_text.find("{")
-        end_idx = raw_text.rfind("}")
-        if start_idx != -1 and end_idx != -1:
-          raw_text = raw_text[start_idx : end_idx + 1]
+                start_idx = raw_text.find("{")
+                end_idx = raw_text.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    raw_text = raw_text[start_idx : end_idx + 1]
 
-        data = json.loads(raw_text)
-        st.session_state["result_data"] = data
-        st.success(
-            "✅ Silabus berhasil dibuat dari teks utuh! Silakan lihat tab di"
-            " bawah untuk menggenerate RPP per pertemuan."
-        )
-      except Exception as json_err:
-        st.error(f"Gagal melakukan parsing data JSON dari AI: {json_err}")
-        with st.expander("🔍 Lihat Mentah Respons AI (untuk debugging)"):
-          st.text(response.text)
+                data = json.loads(raw_text)
+                st.session_state["result_data"] = data
+                st.success("✅ Silabus berhasil dibuat dari teks utuh! Silakan lihat tab di bawah untuk menggenerate RPP per pertemuan.")
+            except Exception as json_err:
+                st.error(f"Gagal melakukan parsing data JSON dari AI: {json_err}")
+                with st.expander("🔍 Lihat Mentah Respons AI (untuk debugging)"):
+                    st.text(response.text)
 
 # ---------------------------------------------------------
 # Tampilan Hasil & Generator RPP Per Pertemuan
