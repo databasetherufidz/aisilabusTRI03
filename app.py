@@ -79,7 +79,7 @@ with col1:
     tingkat_kelas = st.selectbox("Tingkat / Kelas:", ["Ula / Kelas 1", "Wustha / Kelas 2", "Ulya / Kelas 3", "Umum / Majelis"])
 
 with col2:
-    uploaded_pdf = st.file_file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
+    uploaded_pdf = st.file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
 
 # ---------------------------------------------------------
 # Proses Generasi
