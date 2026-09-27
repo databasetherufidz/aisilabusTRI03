@@ -2,10 +2,9 @@ import io
 import streamlit as st
 import pypdf
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from google import genai
-from google.genai import types
 
 # ---------------------------------------------------------
 # Konfigurasi Halaman Streamlit
@@ -75,10 +74,12 @@ def create_docx(content_text: str, title: str) -> io.BytesIO:
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Safinatun Najah / Fiqih")
-    tingkat_kelas = st.selectbox("Tingkat / Kelas:", ["Ula / Kelas 1", "Wustha / Kelas 2", "Ulya / Kelas 3", "Umum / Majelis"])
+    nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Nahwu / Safinatun Najah")
+    # PERUBAHAN: Input ketik manual untuk Tingkat / Kelas
+    tingkat_kelas = st.text_input("Tingkat / Kelas:", placeholder="Contoh: Ula / Kelas 1 / Kelas 7 MTs")
 
 with col2:
+    # PERUBAHAN: st.file_uploader yang benar
     uploaded_pdf = st.file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
 
 # ---------------------------------------------------------
@@ -96,7 +97,7 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
             st.error("Teks pada PDF tidak dapat dibaca (kemungkinan PDF berbentuk scan gambar). Harap gunakan PDF berbasis teks.")
             st.stop()
             
-        # Batasi panjang teks jika terlalu panjang (misal 30.000 karakter pertama)
+        # Batasi panjang teks (30.000 karakter pertama)
         pdf_text_truncated = pdf_text[:30000]
 
     with st.spinner("Gemini AI sedang menyusun Silabus dan RPP..."):
@@ -128,7 +129,6 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         """
         
         try:
-            # Panggilan resmi SDK google-genai
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
