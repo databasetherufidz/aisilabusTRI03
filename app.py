@@ -321,7 +321,7 @@ if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"
         """
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(max_output_tokens=8192, temperature=0.7)
             )
