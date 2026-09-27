@@ -416,13 +416,24 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         }}
         """
         
-        try:
+      try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
             )
             
+            # Membersihkan output dari markdown block (```json ... ```) dengan regex
             raw_text = response.text.strip()
-            if raw_text.startswith("```"):
-                raw_text = raw_text.split("\n", 1)[1]
-                if raw_text.endswith("
+            
+            # Hapus ```json di awal jika ada
+            raw_text = re.sub(r"^```(?:json)?\n?", "", raw_text, flags=re.IGNORECASE)
+            # Hapus ``` di akhir jika ada
+            raw_text = re.sub(r"\n?```$", "", raw_text)
+            
+            raw_text = raw_text.strip()
+            
+            data = json.loads(raw_text)
+            st.session_state["result_data"] = data
+            
+        except Exception as e:
+            st.error(f"Gagal memproses AI / JSON: {str(e)}")
