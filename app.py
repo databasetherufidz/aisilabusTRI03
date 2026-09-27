@@ -2,7 +2,7 @@ import io
 import json
 import os
 import re
-import Streamlit as st
+import streamlit as st
 import pypdf
 import pandas as pd
 from docx import Document
