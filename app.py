@@ -418,7 +418,7 @@ if "result_data" in st.session_state:
                     """
                     try:
                         rpp_response = client.models.generate_content(
-                            model="gemini-2.5-flash",
+                            model="gemini-3.6-flash",
                             contents=rpp_prompt,
                             config=types.GenerateContentConfig(max_output_tokens=4000, temperature=0.7)
                         )
