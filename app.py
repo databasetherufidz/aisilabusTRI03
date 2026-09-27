@@ -5,7 +5,7 @@ import streamlit as st
 import pypdf
 import pandas as pd
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from google import genai
 
@@ -22,7 +22,7 @@ st.title("📖 Generator Silabus & RPP Otomatis dari Kitab")
 st.caption("Unggah file PDF atau masukkan teks kitab secara manual untuk merancang Perangkat Ajar Lengkap siap pakai!")
 
 # ---------------------------------------------------------
-# Inisialisasi Google GenAI Client (Tanpa UI API Key)
+# Inisialisasi Google GenAI Client
 # ---------------------------------------------------------
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key and "GEMINI_API_KEY" in st.secrets:
@@ -47,12 +47,12 @@ def extract_text_from_pdf(pdf_file) -> str:
     return text
 
 # ---------------------------------------------------------
-# Fungsi Helper: Format Dokumen Word (.docx)
+# Fungsi Helper: Format Dokumen Word (.docx) Sesuaikan RPP Contoh
 # ---------------------------------------------------------
 def create_full_docx(data: dict) -> io.BytesIO:
     doc = Document()
     
-    # Header Utama
+    # ---------------- SILABUS SECTION ----------------
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_header = p_title.add_run("PERANGKAT AJAR LENGKAP\nSILABUS & RENCANA PELAKSANAAN PEMBELAJARAN (RPP)\n")
@@ -60,7 +60,6 @@ def create_full_docx(data: dict) -> io.BytesIO:
     run_header.font.size = Pt(14)
     run_header.font.name = 'Arial'
 
-    # I. IDENTITAS PERANGKAT AJAR
     h1 = doc.add_heading("I. IDENTITAS PERANGKAT AJAR", level=2)
     h1.style.font.name = 'Arial'
     
@@ -74,7 +73,6 @@ def create_full_docx(data: dict) -> io.BytesIO:
     p_id.style.font.name = 'Arial'
     p_id.style.font.size = Pt(11)
 
-    # II. SILABUS PEMBELAJARAN
     h2 = doc.add_heading("II. SILABUS PEMBELAJARAN", level=2)
     h2.style.font.name = 'Arial'
     
@@ -109,37 +107,72 @@ def create_full_docx(data: dict) -> io.BytesIO:
 
     doc.add_page_break()
 
-    # III. RENCANA PELAKSANAAN PEMBELAJARAN (RPP PER PERTEMUAN)
-    h3 = doc.add_heading("III. RENCANA PELAKSANAAN PEMBELAJARAN (RPP)", level=2)
-    h3.style.font.name = 'Arial'
-    
+    # ---------------- RPP SECTION (SESUAI DOKUMEN ACUAN) ----------------
     rpp_list = data.get("rpp_list", [])
     for idx_rpp, rpp in enumerate(rpp_list, 1):
-        doc.add_heading(f"RPP Pertemuan Ke-{rpp.get('ptm', idx_rpp)}", level=3)
+        # Header Lembaga
+        p_lembaga = doc.add_paragraph()
+        p_lembaga.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_inst = p_lembaga.add_run("THE RUFIDZ INDONESIA\n")
+        run_inst.bold = True
+        run_inst.font.size = Pt(14)
+        run_inst.font.name = 'Arial'
         
+        run_rpp_title = p_lembaga.add_run("RENCANA PELAKSANAAN PEMBELAJARAN (RPP)")
+        run_rpp_title.bold = True
+        run_rpp_title.font.size = Pt(12)
+        run_rpp_title.font.name = 'Arial'
+
+        # Atribut Identitas
         rpp_id = (
-            f"Sekolah       : {rpp.get('sekolah', 'Lembaga Diniyah/Pesantren')}\n"
+            f"Sekolah       : {rpp.get('sekolah', 'MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia')}\n"
             f"Mata Pelajaran: {data.get('fan_ilmu', '')} ({data.get('nama_kitab', '')})\n"
             f"Kelas / Tahap : {data.get('tingkat_kelas', '')}\n"
             f"Materi Pokok  : {rpp.get('materi_pokok', '')}\n"
             f"Alokasi Waktu : {rpp.get('alokasi_waktu', '')}"
         )
-        doc.add_paragraph(rpp_id).style.font.name = 'Arial'
+        p_ident = doc.add_paragraph(rpp_id)
+        p_ident.style.font.name = 'Arial'
+        p_ident.style.font.size = Pt(11)
 
         # A. Tujuan Pembelajaran
-        doc.add_heading("A. Tujuan Pembelajaran", level=4)
+        p_tujuan_head = doc.add_paragraph()
+        r_tujuan = p_tujuan_head.add_run("A. Tujuan Pembelajaran")
+        r_tujuan.bold = True
+        r_tujuan.font.size = Pt(11)
+        r_tujuan.font.name = 'Arial'
+        
         for t in rpp.get("tujuan_pembelajaran", []):
             p = doc.add_paragraph(f"• {t}")
             p.style.font.name = 'Arial'
+            p.style.font.size = Pt(11)
 
         # B. Langkah-Langkah Pembelajaran
-        doc.add_heading("B. Langkah-Langkah Pembelajaran", level=4)
+        p_langkah_head = doc.add_paragraph()
+        r_langkah = p_langkah_head.add_run("B. Langkah-Langkah Pembelajaran")
+        r_langkah.bold = True
+        r_langkah.font.size = Pt(11)
+        r_langkah.font.name = 'Arial'
         
-        doc.add_paragraph("Kegiatan Pendahuluan").runs[0].bold = True
+        # 1. Kegiatan Pendahuluan
+        p_pend = doc.add_paragraph()
+        r_pend = p_pend.add_run("1. Kegiatan Pendahuluan")
+        r_pend.bold = True
+        r_pend.font.size = Pt(11)
+        r_pend.font.name = 'Arial'
+        
         for p_item in rpp.get("langkah_pembelajaran", {}).get("pendahuluan", []):
-            doc.add_paragraph(f"• {p_item}")
+            p = doc.add_paragraph(f"• {p_item}")
+            p.style.font.name = 'Arial'
+            p.style.font.size = Pt(11)
 
-        doc.add_paragraph("\nKegiatan Inti").runs[0].bold = True
+        # 2. Kegiatan Inti
+        p_inti_head = doc.add_paragraph()
+        r_inti_head = p_inti_head.add_run("2. Kegiatan Inti")
+        r_inti_head.bold = True
+        r_inti_head.font.size = Pt(11)
+        r_inti_head.font.name = 'Arial'
+        
         inti_list = rpp.get("langkah_pembelajaran", {}).get("inti", [])
         if inti_list:
             table_inti = doc.add_table(rows=1, cols=2)
@@ -149,22 +182,47 @@ def create_full_docx(data: dict) -> io.BytesIO:
             hdr[1].text = "Kegiatan Pembelajaran"
             hdr[0].paragraphs[0].runs[0].font.bold = True
             hdr[1].paragraphs[0].runs[0].font.bold = True
+            hdr[0].paragraphs[0].runs[0].font.size = Pt(10)
+            hdr[1].paragraphs[0].runs[0].font.size = Pt(10)
             
             for item in inti_list:
                 r_cells = table_inti.add_row().cells
                 r_cells[0].text = item.get("aspek", "")
                 r_cells[1].text = item.get("kegiatan", "")
+                r_cells[0].paragraphs[0].runs[0].font.size = Pt(10)
+                r_cells[1].paragraphs[0].runs[0].font.size = Pt(10)
 
-        doc.add_paragraph("\nKegiatan Penutup").runs[0].bold = True
+        # 3. Kegiatan Penutup
+        p_penut = doc.add_paragraph()
+        r_penut = p_penut.add_run("\n3. Kegiatan Penutup")
+        r_penut.bold = True
+        r_penut.font.size = Pt(11)
+        r_penut.font.name = 'Arial'
+        
         for p_item in rpp.get("langkah_pembelajaran", {}).get("penutup", []):
-            doc.add_paragraph(f"• {p_item}")
+            p = doc.add_paragraph(f"• {p_item}")
+            p.style.font.name = 'Arial'
+            p.style.font.size = Pt(11)
 
-        # C. Penilaian
-        doc.add_heading("C. Penilaian Hasil Pembelajaran", level=4)
+        # C. Penilaian Hasil Pembelajaran
+        p_penilaian_head = doc.add_paragraph()
+        r_penilaian = p_penilaian_head.add_run("C. Penilaian Hasil Pembelajaran")
+        r_penilaian.bold = True
+        r_penilaian.font.size = Pt(11)
+        r_penilaian.font.name = 'Arial'
+        
         penilaian = rpp.get("penilaian", {})
-        doc.add_paragraph(f"• Penilaian Sikap: {penilaian.get('sikap', '')}")
-        doc.add_paragraph(f"• Penilaian Pengetahuan: {penilaian.get('pengetahuan', '')}")
-        doc.add_paragraph(f"• Penilaian Keterampilan: {penilaian.get('keterampilan', '')}")
+        st_p1 = doc.add_paragraph(f"• Penilaian Sikap: {penilaian.get('sikap', '')}")
+        st_p1.style.font.name = 'Arial'
+        st_p1.style.font.size = Pt(11)
+        
+        st_p2 = doc.add_paragraph(f"• Penilaian Pengetahuan: {penilaian.get('pengetahuan', '')}")
+        st_p2.style.font.name = 'Arial'
+        st_p2.style.font.size = Pt(11)
+        
+        st_p3 = doc.add_paragraph(f"• Penilaian Keterampilan: {penilaian.get('keterampilan', '')}")
+        st_p3.style.font.name = 'Arial'
+        st_p3.style.font.size = Pt(11)
 
         # Tanda Tangan
         doc.add_paragraph("\n")
@@ -172,10 +230,17 @@ def create_full_docx(data: dict) -> io.BytesIO:
         ttd_cells_0 = ttd_table.rows[0].cells
         ttd_cells_1 = ttd_table.rows[1].cells
         
-        ttd_cells_0[0].text = "Mengetahui,\nKepala Sekolah / Mudir"
+        ttd_cells_0[0].text = "Mengetahui,\nKepala Sekolah"
         ttd_cells_0[1].text = "\nPengampu Mapel"
-        ttd_cells_1[0].text = "\n\n( .................................... )"
-        ttd_cells_1[1].text = "\n\n( .................................... )"
+        ttd_cells_1[0].text = "\n\n( Mudir Sekolah )"
+        ttd_cells_1[1].text = "\n\n( Ustadz Pengampu )"
+        
+        for row in ttd_table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.font.name = 'Arial'
+                        run.font.size = Pt(11)
         
         if idx_rpp < len(rpp_list):
             doc.add_page_break()
@@ -192,12 +257,12 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Matan Al-Ajurrumiyyah")
-    fan_ilmu = st.text_input("Fan Ilmu:", placeholder="Contoh: Nahwu / Fiqih")
-    tingkat_kelas = st.text_input("Tingkat / Kelas:", placeholder="Contoh: Kelas 7 / Ula 1")
+    fan_ilmu = st.text_input("Fan Ilmu:", placeholder="Contoh: Ilmu Nahwu")
+    tingkat_kelas = st.text_input("Tingkat / Kelas:", placeholder="Contoh: Kelas 7")
     
     col_ptm, col_waktu = st.columns(2)
     with col_ptm:
-        total_pertemuan_input = st.text_input("Total Pertemuan:", placeholder="Contoh: 6 Pertemuan / 12 Pertemuan")
+        total_pertemuan_input = st.text_input("Total Pertemuan:", placeholder="Contoh: 6 Pertemuan")
     with col_waktu:
         alokasi_waktu_input = st.text_input("Alokasi Waktu per Pertemuan:", placeholder="Contoh: 2 x 45 Menit")
 
@@ -243,11 +308,11 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         
     pdf_text_truncated = final_text[:30000]
 
-    with st.spinner("Gemini AI sedang menyusun Silabus dan RPP untuk setiap pertemuan..."):
+    with st.spinner("Gemini AI sedang menyusun Silabus dan RPP..."):
         prompt = f"""
         Anda adalah seorang pakar kurikulum madrasah/pesantren.
         
-        Tugas Anda: Analisis teks kitab berikut dan buatkan Silabus serta RPP 1 Lembar UNTUK TIAP PERTEMUAN dalam bentuk format JSON murni.
+        Tugas Anda: Analisis teks kitab berikut dan buatkan Silabus serta RPP 1 Lembar UNTUK TIAP PERTEMUAN dalam format JSON murni.
         
         --- DETAIL INPUT ---
         - Nama Kitab: {nama_kitab}
@@ -259,9 +324,12 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         {pdf_text_truncated}
         --------------------
         
-        Instruksi Khusus RPP:
-        1. Buatkan array `rpp_list` yang berisi RPP 1 lembar untuk SETIAP PERTEMUAN yang ada di silabus.
-        2. Setiap elemen di `rpp_list` harus spesifik membahas materi/bab sesuai nomor pertemuannya.
+        Gunakan acuan struktur RPP 1 Lembar persis seperti ini:
+        - Sekolah: MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia
+        - Pendahuluan: Berisi salam, istighfar, doa bersama, presensi, motivasi, apersepsi, dan penyampaian tujuan.
+        - Kegiatan Inti (Tabel 5 C): "Kegiatan Literasi", "Critical Thinking", "Collaboration", "Communication", "Creativity".
+        - Penutup: Menyimpulkan poin utama, umpan balik/tugas, doa kafaratul majlis, dan salam.
+        - Penilaian: Penilaian Sikap, Pengetahuan, dan Keterampilan.
         
         Keluarkan respons HANYA dalam bentuk JSON valid tanpa tanda backtick markdown dengan struktur persis seperti ini:
         {{
@@ -272,43 +340,48 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
             "silabus": [
                 {{
                     "ptm": 1,
-                    "bab": "Babu Al-Kalam",
+                    "bab": "Bab Al-Kalam (Pengertian Kalam dan Pembagian Kata)",
                     "halaman": "Hal 1 - 3",
                     "alokasi_waktu": "{alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}",
-                    "metode": "Ceramah Interaktif dan Tanya Jawab",
-                    "capaian": "Santri memahami definisi Al-Kalam...",
-                    "indikator": "Santri dapat menyebutkan definisi Al-Kalam...",
-                    "evaluasi": "Tes Lisan dan Latihan Soal Tertulis"
+                    "metode": "Ceramah Interaktif dan Diskusi Kelompok",
+                    "capaian": "Santri mampu menjelaskan definisi Kalam menurut istilah ilmu Nahwu dengan tepat...",
+                    "indikator": "Santri mampu mengidentifikasi pembagian kata beserta tanda-tandanya...",
+                    "evaluasi": "Tes Lisan dan Tulis"
                 }}
             ],
             "rpp_list": [
                 {{
                     "ptm": 1,
-                    "sekolah": "Lembaga Diniyah & Pesantren",
-                    "materi_pokok": "Pengertian Al-Kalam dan Pembagiannya",
+                    "sekolah": "MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia",
+                    "materi_pokok": "Bab Al-Kalam (Pengertian Kalam dan Pembagian Kata)",
                     "alokasi_waktu": "{alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}",
                     "tujuan_pembelajaran": [
-                        "Santri dapat menjelaskan pengertian Al-Kalam...",
-                        "Santri dapat menyebutkan 4 syarat pembentuk Al-Kalam..."
+                        "Santri mampu menjelaskan definisi Kalam menurut istilah ilmu Nahwu dengan tepat.",
+                        "Santri mampu mengidentifikasi pembagian kata (Isim, Fi'il, dan Huruf) beserta tanda-tandanya dengan benar."
                     ],
                     "langkah_pembelajaran": {{
                         "pendahuluan": [
-                            "Guru membuka pembelajaran dengan salam dan doa.",
-                            "Guru mengabsen kehadiran santri."
+                            "Guru membuka pembelajaran dengan salam, istighfar, dan doa bersama.",
+                            "Guru memeriksa kehadiran santri dan memberikan motivasi pentingnya belajar ilmu Nahwu.",
+                            "Guru menyampaikan apersepsi serta tujuan pembelajaran untuk Bab Al-Kalam."
                         ],
                         "inti": [
-                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca bersama matan..."}},
-                            {{"aspek": "Critical Thinking", "kegiatan": "Santri menganalisis 4 syarat..."}}
+                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab Matan Al-Ajurrumiyyah secara bersama-sama."}},
+                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf dalam kalimat."}},
+                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad dalam contoh kalimat ke dalam kelompok Isim, Fi'il, atau Huruf."}},
+                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas dan kelompok lain memberikan tanggapan."}},
+                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur-unsur pembentuk Kalam di buku catatan masing-masing."}}
                         ],
                         "penutup": [
-                            "Guru bersama santri merangkum poin penting.",
-                            "Pembelajaran ditutup dengan doa."
+                            "Guru bersama santri menyimpulkan poin-poin utama materi Bab Al-Kalam.",
+                            "Guru memberikan umpan balik, apresiasi, serta tugas latihan mandiri di rumah.",
+                            "Kegiatan pembelajaran ditutup dengan doa kafaratul majlis dan salam."
                         ]
                     }},
                     "penilaian": {{
-                        "sikap": "Kedisiplinan dan kerapian selama pembelajaran.",
-                        "pengetahuan": "Tes lisan hafalan matan.",
-                        "keterampilan": "Kemampuan membuat contoh kalimat."
+                        "sikap": "Observasi kedisiplinan dan keaktifan santri selama kegiatan belajar mengajar.",
+                        "pengetahuan": "Tes lisan dan tulis mengenai definisi serta pembagian kalam.",
+                        "keterampilan": "Unjuk kerja kelengkapan dan kerapihan bagan peta konsep pembagian kata."
                     }}
                 }}
             ]
@@ -334,7 +407,7 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
             st.error(f"Gagal memproses AI / JSON: {str(e)}")
 
 # ---------------------------------------------------------
-# Tampilan Hasil (Sesuai Desain UI)
+# Tampilan Hasil
 # ---------------------------------------------------------
 if "result_data" in st.session_state:
     data = st.session_state["result_data"]
@@ -342,7 +415,6 @@ if "result_data" in st.session_state:
     st.markdown("---")
     st.header(f"📖 Identitas Kurikulum: {data.get('nama_kitab', '')}")
     
-    # 3 Metric Cards
     m1, m2, m3 = st.columns(3)
     with m1:
         st.caption("Fan Ilmu")
@@ -356,7 +428,6 @@ if "result_data" in st.session_state:
     
     st.write("")
     
-    # Tab Tampilan
     tab_silabus, tab_rpp = st.tabs(["📑 Silabus Pembelajaran", "📝 RPP Tiap Pertemuan"])
     
     with tab_silabus:
@@ -384,27 +455,38 @@ if "result_data" in st.session_state:
             selected_index = ptm_options.index(selected_ptm)
             rpp = rpp_list[selected_index]
             
-            st.markdown(f"### RPP Pertemuan Ke-{rpp.get('ptm', selected_index+1)}")
+            st.markdown("### THE RUFIDZ INDONESIA")
+            st.markdown("#### RENCANA PELAKSANAAN PEMBELAJARAN (RPP)")
             st.markdown(f"**Sekolah**: {rpp.get('sekolah', '-')}")
+            st.markdown(f"**Mata Pelajaran**: {data.get('fan_ilmu', '')} ({data.get('nama_kitab', '')})")
+            st.markdown(f"**Kelas / Tahap**: {data.get('tingkat_kelas', '')}")
             st.markdown(f"**Materi Pokok**: {rpp.get('materi_pokok', '-')}")
             st.markdown(f"**Alokasi Waktu**: {rpp.get('alokasi_waktu', '-')}")
             
             st.markdown("#### A. Tujuan Pembelajaran")
             for t in rpp.get("tujuan_pembelajaran", []):
-                st.markdown(f"* {t}")
+                st.markdown(f"• {t}")
                 
             st.markdown("#### B. Langkah-Langkah Pembelajaran")
-            st.markdown("**Kegiatan Inti:**")
+            st.markdown("**1. Kegiatan Pendahuluan**")
+            for p_item in rpp.get("langkah_pembelajaran", {}).get("pendahuluan", []):
+                st.markdown(f"• {p_item}")
+                
+            st.markdown("**2. Kegiatan Inti**")
             df_inti = pd.DataFrame(rpp.get("langkah_pembelajaran", {}).get("inti", []))
             if not df_inti.empty:
                 df_inti.rename(columns={"aspek": "Aspek", "kegiatan": "Kegiatan Pembelajaran"}, inplace=True)
                 st.table(df_inti)
                 
-            st.markdown("#### C. Penilaian")
+            st.markdown("**3. Kegiatan Penutup**")
+            for p_item in rpp.get("langkah_pembelajaran", {}).get("penutup", []):
+                st.markdown(f"• {p_item}")
+                
+            st.markdown("#### C. Penilaian Hasil Pembelajaran")
             pen = rpp.get("penilaian", {})
-            st.write(f"* **Sikap**: {pen.get('sikap')}")
-            st.write(f"* **Pengetahuan**: {pen.get('pengetahuan')}")
-            st.write(f"* **Keterampilan**: {pen.get('keterampilan')}")
+            st.write(f"• **Penilaian Sikap**: {pen.get('sikap')}")
+            st.write(f"• **Penilaian Pengetahuan**: {pen.get('pengetahuan')}")
+            st.write(f"• **Penilaian Keterampilan**: {pen.get('keterampilan')}")
 
     st.markdown("---")
     st.subheader("📬 Download Perangkat Ajar Lengkap:")
@@ -414,7 +496,7 @@ if "result_data" in st.session_state:
     st.download_button(
         label="📦 Download Paket Lengkap Silabus & RPP Semua Pertemuan (.docx)",
         data=full_docx_buffer,
-        file_name=f"Perangkat_Ajar_Lengkap_{data.get('nama_kitab','').replace(' ', '_')}.docx",
+        file_name=f"RPP_{data.get('nama_kitab','').replace(' ', '_')}.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         use_container_width=True,
         type="primary"
