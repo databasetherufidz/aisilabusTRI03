@@ -331,22 +331,23 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         with st.spinner("Membaca dan menganalisis halaman PDF yang dipilih..."):
             extracted = extract_text_from_pdf(uploaded_pdf, page_range_input)
             if not extracted.strip():
-                st.error("Teks pada rentang halaman PDF tersebut tidak dapat dibaca atau kosong.")
+                st.error("Teks pada PDF tidak terbaca. Pastikan PDF bukan hasil scan/gambar.")
                 st.stop()
             final_text = extracted
     else:
         if not kitab_text_input.strip():
-            st.error("Harap masukkan atau salin teks kitab terlebih dahulu.")
+            st.error("Harap masukkan teks kitab terlebih dahulu.")
             st.stop()
         final_text = kitab_text_input
         
-    pdf_text_truncated = final_text[:30000]
+    pdf_text = final_text 
 
-    with st.spinner("Gemini AI sedang menyusun Silabus dan RPP..."):
+    with st.spinner("Gemini AI sedang menyusun Silabus dan RPP dari teks yang Anda berikan..."):
         prompt = f"""
         Anda adalah seorang pakar kurikulum madrasah/pesantren.
         
-        Tugas Anda: Analisis teks kitab berikut dan buatkan Silabus serta RPP 1 Lembar UNTUK TIAP PERTEMUAN dalam format JSON murni.
+        Tugas Anda: Analisis TEKS KITAB yang diberikan secara mendalam dan buatkan Silabus serta RPP 1 Lembar UNTUK TIAP PERTEMUAN.
+        Pastikan materi yang Anda buat BENAR-BENAR bersumber dari TEKS KITAB di bawah ini, BUKAN dari pengetahuan umum.
         
         --- DETAIL INPUT ---
         - Nama Kitab: {nama_kitab}
@@ -355,17 +356,12 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan dengan cakupan materi'}
         - Alokasi Waktu per Pertemuan: {alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}
         --- TEKS KITAB ---
-        {pdf_text_truncated}
+        {pdf_text}
         --------------------
         
-        Gunakan acuan struktur RPP 1 Lembar persis seperti ini:
-        - Sekolah: MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia
-        - Pendahuluan: Berisi salam, istighfar, doa bersama, presensi, motivasi, apersepsi, dan penyampaian tujuan.
-        - Kegiatan Inti (Tabel 5 C): "Kegiatan Literasi", "Critical Thinking", "Collaboration", "Communication", "Creativity".
-        - Penutup: Menyimpulkan poin utama, umpan balik/tugas, doa kafaratul majlis, dan salam.
-        - Penilaian: Penilaian Sikap, Pengetahuan, dan Keterampilan.
+        Keluarkan respons HANYA dalam bentuk JSON valid. Gunakan struktur di bawah ini sebagai TEMPLATE. 
+        Ganti teks berawalan "[" dan diakhiri "]" dengan hasil analisis Anda yang SEBENARNYA dari teks kitab!
         
-        Keluarkan respons HANYA dalam bentuk JSON valid tanpa tanda backtick markdown dengan struktur persis seperti ini:
         {{
             "nama_kitab": "{nama_kitab}",
             "fan_ilmu": "{fan_ilmu}",
@@ -374,48 +370,46 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
             "silabus": [
                 {{
                     "ptm": 1,
-                    "bab": "Bab Al-Kalam (Pengertian Kalam dan Pembagian Kata)",
-                    "halaman": "Hal 1 - 3",
+                    "bab": "[Isi dengan nama bab/fasal dari teks kitab pada halaman terkait]",
+                    "halaman": "[Rentang halaman yang dibahas di ptm ini]",
                     "alokasi_waktu": "{alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}",
-                    "metode": "Ceramah Interaktif dan Diskusi Kelompok",
-                    "capaian": "Santri mampu menjelaskan definisi Kalam menurut istilah ilmu Nahwu dengan tepat...",
-                    "indikator": "Santri mampu mengidentifikasi pembagian kata beserta tanda-tandanya...",
-                    "evaluasi": "Tes Lisan dan Tulis"
+                    "metode": "[Contoh: Ceramah Interaktif]",
+                    "capaian": "[Rumuskan capaian berdasarkan materi kitab tersebut]",
+                    "indikator": "[Rumuskan indikator keberhasilan]",
+                    "evaluasi": "[Tentukan evaluasinya]"
                 }}
             ],
             "rpp_list": [
                 {{
                     "ptm": 1,
                     "sekolah": "MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia",
-                    "materi_pokok": "Bab Al-Kalam (Pengertian Kalam dan Pembagian Kata)",
+                    "materi_pokok": "[Isi dengan materi spesifik pada pertemuan ini]",
                     "alokasi_waktu": "{alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}",
                     "tujuan_pembelajaran": [
-                        "Santri mampu menjelaskan definisi Kalam menurut istilah ilmu Nahwu dengan tepat.",
-                        "Santri mampu mengidentifikasi pembagian kata (Isim, Fi'il, dan Huruf) beserta tanda-tandanya dengan benar."
+                        "[Tujuan 1 berdasarkan teks]",
+                        "[Tujuan 2 berdasarkan teks]"
                     ],
                     "langkah_pembelajaran": {{
                         "pendahuluan": [
                             "Guru membuka pembelajaran dengan salam, istighfar, dan doa bersama.",
-                            "Guru memeriksa kehadiran santri dan memberikan motivasi pentingnya belajar ilmu Nahwu.",
-                            "Guru menyampaikan apersepsi serta tujuan pembelajaran untuk Bab Al-Kalam."
+                            "Guru menyampaikan apersepsi serta tujuan pembelajaran materi ini."
                         ],
                         "inti": [
-                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab Matan Al-Ajurrumiyyah secara bersama-sama."}},
-                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf dalam kalimat."}},
-                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad dalam contoh kalimat ke dalam kelompok Isim, Fi'il, atau Huruf."}},
-                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas dan kelompok lain memberikan tanggapan."}},
-                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur-unsur pembentuk Kalam di buku catatan masing-masing."}}
+                            {{"aspek": "Kegiatan Literasi", "kegiatan": "[Jelaskan kegiatan santri membaca materi kitab ini]"}},
+                            {{"aspek": "Critical Thinking", "kegiatan": "[Jelaskan kegiatan berpikir kritis dari materi ini]"}},
+                            {{"aspek": "Collaboration", "kegiatan": "[Jelaskan aktivitas kerja kelompok]"}},
+                            {{"aspek": "Communication", "kegiatan": "[Jelaskan aktivitas komunikasi santri]"}},
+                            {{"aspek": "Creativity", "kegiatan": "[Jelaskan aktivitas kreatif santri]"}}
                         ],
                         "penutup": [
-                            "Guru bersama santri menyimpulkan poin-poin utama materi Bab Al-Kalam.",
-                            "Guru memberikan umpan balik, apresiasi, serta tugas latihan mandiri di rumah.",
-                            "Kegiatan pembelajaran ditutup dengan doa kafaratul majlis dan salam."
+                            "Guru bersama santri menyimpulkan materi.",
+                            "Kegiatan ditutup dengan doa kafaratul majlis."
                         ]
                     }},
                     "penilaian": {{
-                        "sikap": "Observasi kedisiplinan dan keaktifan santri selama kegiatan belajar mengajar.",
-                        "pengetahuan": "Tes lisan dan tulis mengenai definisi serta pembagian kalam.",
-                        "keterampilan": "Unjuk kerja kelengkapan dan kerapihan bagan peta konsep pembagian kata."
+                        "sikap": "[Metode penilaian sikap]",
+                        "pengetahuan": "[Metode penilaian pengetahuan]",
+                        "keterampilan": "[Metode penilaian keterampilan]"
                     }}
                 }}
             ]
@@ -424,125 +418,11 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         
         try:
             response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
+                model="gemini-2.5-flash",
                 contents=prompt
             )
             
             raw_text = response.text.strip()
             if raw_text.startswith("```"):
                 raw_text = raw_text.split("\n", 1)[1]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text.rsplit("\n", 1)[0]
-            
-            data = json.loads(raw_text)
-            st.session_state["result_data"] = data
-            
-        except Exception as e:
-            st.error(f"Gagal memproses AI / JSON: {str(e)}")
-
-# ---------------------------------------------------------
-# Tampilan Hasil
-# ---------------------------------------------------------
-if "result_data" in st.session_state:
-    data = st.session_state["result_data"]
-    
-    st.markdown("---")
-    st.header(f"📖 Identitas Kurikulum: {data.get('nama_kitab', '')}")
-    
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.caption("Fan Ilmu")
-        st.markdown(f"### {data.get('fan_ilmu', '-')}")
-    with m2:
-        st.caption("Tingkat / Kelas")
-        st.markdown(f"### {data.get('tingkat_kelas', '-')}")
-    with m3:
-        st.caption("Total Pertemuan")
-        st.markdown(f"### {data.get('total_pertemuan', '-')}")
-    
-    st.write("")
-    
-    tab_silabus, tab_rpp = st.tabs(["📑 Silabus Pembelajaran", "📝 RPP Tiap Pertemuan"])
-    
-    with tab_silabus:
-        silabus_list = data.get("silabus", [])
-        if silabus_list:
-            df_silabus = pd.DataFrame(silabus_list)
-            
-            # Pemetaan nama kolom
-            column_mapping = {
-                "ptm": "Ptm",
-                "bab": "Bab / Fasal",
-                "halaman": "Halaman",
-                "alokasi_waktu": "Alokasi Waktu",
-                "metode": "Metode Klasik",
-                "capaian": "Capaian Indikator",
-                "indikator": "Indikator Ketercapaian",
-                "evaluasi": "Bentuk Evaluasi"
-            }
-            
-            # Hanya ubah kolom yang ada dan belum memiliki nama baru
-            df_silabus.rename(columns={k: v for k, v in column_mapping.items() if k in df_silabus.columns and v not in df_silabus.columns}, inplace=True)
-            
-            # Eliminasi kolom yang terduplikasi secara aman
-            df_silabus = df_silabus.loc[:, ~df_silabus.columns.duplicated()]
-            
-            st.dataframe(df_silabus, use_container_width=True, hide_index=True)
-            
-    with tab_rpp:
-        rpp_list = data.get("rpp_list", [])
-        if rpp_list:
-            ptm_options = [f"Pertemuan Ke-{r.get('ptm', idx+1)}" for idx, r in enumerate(rpp_list)]
-            selected_ptm = st.selectbox("Pilih Pertemuan untuk Dilihat:", ptm_options)
-            
-            selected_index = ptm_options.index(selected_ptm)
-            rpp = rpp_list[selected_index]
-            
-            st.markdown("### THE RUFIDZ INDONESIA")
-            st.markdown("#### RENCANA PELAKSANAAN PEMBELAJARAN (RPP)")
-            st.markdown(f"**Sekolah**: {rpp.get('sekolah', '-')}")
-            st.markdown(f"**Mata Pelajaran**: {data.get('fan_ilmu', '')} ({data.get('nama_kitab', '')})")
-            st.markdown(f"**Kelas / Tahap**: {data.get('tingkat_kelas', '')}")
-            st.markdown(f"**Materi Pokok**: {rpp.get('materi_pokok', '-')}")
-            st.markdown(f"**Alokasi Waktu**: {rpp.get('alokasi_waktu', '-')}")
-            
-            st.markdown("#### A. Tujuan Pembelajaran")
-            for t in rpp.get("tujuan_pembelajaran", []):
-                st.markdown(f"• {t}")
-                
-            st.markdown("#### B. Langkah-Langkah Pembelajaran")
-            st.markdown("**1. Kegiatan Pendahuluan**")
-            for p_item in rpp.get("langkah_pembelajaran", {}).get("pendahuluan", []):
-                st.markdown(f"• {p_item}")
-                
-            st.markdown("**2. Kegiatan Inti**")
-            df_inti = pd.DataFrame(rpp.get("langkah_pembelajaran", {}).get("inti", []))
-            if not df_inti.empty:
-                if "aspek" in df_inti.columns and "kegiatan" in df_inti.columns:
-                    df_inti.rename(columns={"aspek": "Aspek", "kegiatan": "Kegiatan Pembelajaran"}, inplace=True)
-                df_inti = df_inti.loc[:, ~df_inti.columns.duplicated()]
-                st.table(df_inti)
-                
-            st.markdown("**3. Kegiatan Penutup**")
-            for p_item in rpp.get("langkah_pembelajaran", {}).get("penutup", []):
-                st.markdown(f"• {p_item}")
-                
-            st.markdown("#### C. Penilaian Hasil Pembelajaran")
-            pen = rpp.get("penilaian", {})
-            st.write(f"• **Penilaian Sikap**: {pen.get('sikap')}")
-            st.write(f"• **Penilaian Pengetahuan**: {pen.get('pengetahuan')}")
-            st.write(f"• **Penilaian Keterampilan**: {pen.get('keterampilan')}")
-
-    st.markdown("---")
-    st.subheader("📬 Download Perangkat Ajar Lengkap:")
-    
-    full_docx_buffer = create_full_docx(data)
-    
-    st.download_button(
-        label="📦 Download Paket Lengkap Silabus & RPP Semua Pertemuan (.docx)",
-        data=full_docx_buffer,
-        file_name=f"RPP_{data.get('nama_kitab','').replace(' ', '_')}.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        use_container_width=True,
-        type="primary"
-    )
+                if raw_text.endswith("
