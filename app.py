@@ -333,7 +333,7 @@ if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"
                     model="gemini-3.6-flash",
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        max_output_tokens=8192, temperature=0.7
+                        max_output_tokens=65536, temperature=0.7
                     ),
                 )
                 success = True
@@ -451,7 +451,7 @@ if "result_data" in st.session_state:
                         rpp_response = client.models.generate_content(
                             model="gemini-3.6-flash",
                             contents=rpp_prompt,
-                            config=types.GenerateContentConfig(max_output_tokens=4000, temperature=0.7)
+                            config=types.GenerateContentConfig(max_output_tokens=65536, temperature=0.7)
                         )
                         raw_rpp = rpp_response.text.strip()
                         if raw_rpp.startswith("```"):
