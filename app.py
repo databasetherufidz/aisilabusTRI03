@@ -349,16 +349,21 @@ if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"
           st.error(f"Gagal memproses AI / JSON: {str(e)}")
           break
 
-    if success:
+   if success:
       try:
         raw_text = response.text.strip()
-        if raw_text.startswith("```"):
-          lines = raw_text.splitlines()
-          if lines[0].startswith("```"):
-            lines = lines[1:]
-          if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-          raw_text = "\n".join(lines).strip()
+
+        # Membersihkan blok markdown backticks jika ada
+        if "```json" in raw_text:
+          raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+          raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        # Membersihkan teks tambahan di luar kurung kurawal pembuka/penutup JSON
+        start_idx = raw_text.find("{")
+        end_idx = raw_text.rfind("}")
+        if start_idx != -1 and end_idx != -1:
+          raw_text = raw_text[start_idx : end_idx + 1]
 
         data = json.loads(raw_text)
         st.session_state["result_data"] = data
@@ -368,6 +373,8 @@ if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"
         )
       except Exception as json_err:
         st.error(f"Gagal melakukan parsing data JSON dari AI: {json_err}")
+        with st.expander("🔍 Lihat Mentah Respons AI (untuk debugging)"):
+          st.text(response.text)
 
 # ---------------------------------------------------------
 # Tampilan Hasil & Generator RPP Per Pertemuan
