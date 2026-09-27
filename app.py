@@ -1,7 +1,8 @@
 import io
 import json
 import os
-import streamlit as st
+import re
+import Streamlit as st
 import pypdf
 import pandas as pd
 from docx import Document
@@ -35,19 +36,47 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # ---------------------------------------------------------
-# Fungsi Helper: Membaca Teks PDF
+# Fungsi Helper: Membaca & Memfilter Halaman PDF
 # ---------------------------------------------------------
-def extract_text_from_pdf(pdf_file) -> str:
+def parse_page_range(range_str: str, max_pages: int) -> set:
+    """Mengubah input teks seperti '1-5, 8, 10-12' menjadi set indeks halaman (0-indexed)."""
+    pages = set()
+    if not range_str.strip():
+        return set(range(max_pages))
+        
+    parts = range_str.split(',')
+    for part in parts:
+        part = part.strip()
+        if '-' in part:
+            sub = part.split('-')
+            if len(sub) == 2 and sub[0].isdigit() and sub[1].isdigit():
+                start = max(1, int(sub[0]))
+                end = min(max_pages, int(sub[1]))
+                for p in range(start, end + 1):
+                    pages.add(p - 1)
+        elif part.isdigit():
+            p = int(part)
+            if 1 <= p <= max_pages:
+                pages.add(p - 1)
+                
+    return pages if pages else set(range(max_pages))
+
+def extract_text_from_pdf(pdf_file, page_range_str: str = "") -> tuple[str, int, int]:
     reader = pypdf.PdfReader(pdf_file)
+    total_pdf_pages = len(reader.pages)
+    selected_indices = parse_page_range(page_range_str, total_pdf_pages)
+    
     text = ""
-    for page in reader.pages:
+    for idx in sorted(list(selected_indices)):
+        page = reader.pages[idx]
         extracted = page.extract_text()
         if extracted:
-            text += extracted + "\n"
-    return text
+            text += f"\n--- [Halaman {idx + 1}] ---\n" + extracted
+            
+    return text, len(selected_indices), total_pdf_pages
 
 # ---------------------------------------------------------
-# Fungsi Helper: Format Dokumen Word (.docx) Sesuaikan RPP Contoh
+# Fungsi Helper: Format Dokumen Word (.docx)
 # ---------------------------------------------------------
 def create_full_docx(data: dict) -> io.BytesIO:
     doc = Document()
@@ -107,10 +136,9 @@ def create_full_docx(data: dict) -> io.BytesIO:
 
     doc.add_page_break()
 
-    # ---------------- RPP SECTION (SESUAI DOKUMEN ACUAN) ----------------
+    # ---------------- RPP SECTION ----------------
     rpp_list = data.get("rpp_list", [])
     for idx_rpp, rpp in enumerate(rpp_list, 1):
-        # Header Lembaga
         p_lembaga = doc.add_paragraph()
         p_lembaga.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_inst = p_lembaga.add_run("THE RUFIDZ INDONESIA\n")
@@ -123,7 +151,6 @@ def create_full_docx(data: dict) -> io.BytesIO:
         run_rpp_title.font.size = Pt(12)
         run_rpp_title.font.name = 'Arial'
 
-        # Atribut Identitas
         rpp_id = (
             f"Sekolah       : {rpp.get('sekolah', 'MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia')}\n"
             f"Mata Pelajaran: {data.get('fan_ilmu', '')} ({data.get('nama_kitab', '')})\n"
@@ -251,12 +278,12 @@ def create_full_docx(data: dict) -> io.BytesIO:
     return buffer
 
 # ---------------------------------------------------------
-# Form Input
+# Form Input UI
 # ---------------------------------------------------------
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Matan Al-Ajurrumiyyah")
+    nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Nahwu / Matan Al-Ajurrumiyyah")
     fan_ilmu = st.text_input("Fan Ilmu:", placeholder="Contoh: Ilmu Nahwu")
     tingkat_kelas = st.text_input("Tingkat / Kelas:", placeholder="Contoh: Kelas 7")
     
@@ -274,8 +301,14 @@ with col2:
     )
     
     kitab_text_input = ""
+    page_range_input = ""
     if metode_input == "📁 Upload File PDF":
         uploaded_pdf = st.file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
+        page_range_input = st.text_input(
+            "Rentang Halaman yang Ingin Dianalisis (Opsional):",
+            placeholder="Contoh: 1-10 atau 5, 8, 12-20 (Kosongkan jika semua)",
+            help="Tentukan halaman tertentu pada PDF yang ingin dijadikan bahan RPP/Silabus."
+        )
     else:
         uploaded_pdf = None
         kitab_text_input = st.text_area(
@@ -294,12 +327,13 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         if not uploaded_pdf:
             st.error("Harap unggah berkas PDF kitab terlebih dahulu.")
             st.stop()
-        with st.spinner("Membaca dan menganalisis teks PDF kitab..."):
-            extracted = extract_text_from_pdf(uploaded_pdf)
+        with st.spinner("Membaca dan memproses halaman PDF..."):
+            extracted, selected_count, total_count = extract_text_from_pdf(uploaded_pdf, page_range_input)
             if not extracted.strip():
-                st.error("Teks pada PDF tidak dapat dibaca. Harap gunakan PDF berbasis teks atau pilih opsi 'Ketik / Paste Teks Manual'.")
+                st.error("Teks pada halaman PDF terpilih tidak terbaca/kosong. Pastikan file PDF mengandung teks.")
                 st.stop()
             final_text = extracted
+            st.success(f"Berhasil mengekstrak {selected_count} dari total {total_count} halaman PDF.")
     else:
         if not kitab_text_input.strip():
             st.error("Harap masukkan atau salin teks kitab terlebih dahulu.")
@@ -318,7 +352,7 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         - Nama Kitab: {nama_kitab}
         - Fan Ilmu: {fan_ilmu}
         - Tingkat / Kelas: {tingkat_kelas}
-        - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan dengan cakupan materi'}
+        - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan dengan materi'}
         - Alokasi Waktu per Pertemuan: {alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}
         --- TEKS KITAB ---
         {pdf_text_truncated}
@@ -366,11 +400,11 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
                             "Guru menyampaikan apersepsi serta tujuan pembelajaran untuk Bab Al-Kalam."
                         ],
                         "inti": [
-                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab Matan Al-Ajurrumiyyah secara bersama-sama."}},
-                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf dalam kalimat."}},
-                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad dalam contoh kalimat ke dalam kelompok Isim, Fi'il, atau Huruf."}},
-                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas dan kelompok lain memberikan tanggapan."}},
-                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur-unsur pembentuk Kalam di buku catatan masing-masing."}}
+                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab secara bersama-sama."}},
+                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf."}},
+                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad ke dalam Isim, Fi'il, atau Huruf."}},
+                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas."}},
+                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur pembentuk Kalam."}}
                         ],
                         "penutup": [
                             "Guru bersama santri menyimpulkan poin-poin utama materi Bab Al-Kalam.",
