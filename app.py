@@ -6,7 +6,7 @@ import streamlit as st
 import pypdf
 import pandas as pd
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from google import genai
 
@@ -36,14 +36,14 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # ---------------------------------------------------------
-# Fungsi Helper: Membaca & Memfilter Halaman PDF
+# Fungsi Helper: Membaca Teks PDF Berdasarkan Rentang Halaman
 # ---------------------------------------------------------
-def parse_page_range(range_str: str, max_pages: int) -> set:
-    """Mengubah input teks seperti '1-5, 8, 10-12' menjadi set indeks halaman (0-indexed)."""
-    pages = set()
+def parse_page_range(range_str: str, total_pages: int):
+    """Mengubah string seperti '1-5' atau '1,3,5-7' menjadi set indeks halaman (0-indexed)."""
     if not range_str.strip():
-        return set(range(max_pages))
-        
+        return set(range(total_pages))
+    
+    selected_pages = set()
     parts = range_str.split(',')
     for part in parts:
         part = part.strip()
@@ -51,29 +51,30 @@ def parse_page_range(range_str: str, max_pages: int) -> set:
             sub = part.split('-')
             if len(sub) == 2 and sub[0].isdigit() and sub[1].isdigit():
                 start = max(1, int(sub[0]))
-                end = min(max_pages, int(sub[1]))
+                end = min(total_pages, int(sub[1]))
                 for p in range(start, end + 1):
-                    pages.add(p - 1)
+                    selected_pages.add(p - 1)
         elif part.isdigit():
             p = int(part)
-            if 1 <= p <= max_pages:
-                pages.add(p - 1)
-                
-    return pages if pages else set(range(max_pages))
-
-def extract_text_from_pdf(pdf_file, page_range_str: str = "") -> tuple[str, int, int]:
-    reader = pypdf.PdfReader(pdf_file)
-    total_pdf_pages = len(reader.pages)
-    selected_indices = parse_page_range(page_range_str, total_pdf_pages)
+            if 1 <= p <= total_pages:
+                selected_pages.add(p - 1)
     
+    return sorted(list(selected_pages))
+
+def extract_text_from_pdf(pdf_file, page_range_str: str = "") -> str:
+    reader = pypdf.PdfReader(pdf_file)
+    total_pages = len(reader.pages)
+    
+    page_indices = parse_page_range(page_range_str, total_pages)
+    if not page_indices:
+        page_indices = list(range(total_pages))
+        
     text = ""
-    for idx in sorted(list(selected_indices)):
-        page = reader.pages[idx]
-        extracted = page.extract_text()
+    for idx in page_indices:
+        extracted = reader.pages[idx].extract_text()
         if extracted:
-            text += f"\n--- [Halaman {idx + 1}] ---\n" + extracted
-            
-    return text, len(selected_indices), total_pdf_pages
+            text += f"\n--- Halaman {idx + 1} ---\n" + extracted
+    return text
 
 # ---------------------------------------------------------
 # Fungsi Helper: Format Dokumen Word (.docx)
@@ -162,7 +163,7 @@ def create_full_docx(data: dict) -> io.BytesIO:
         p_ident.style.font.name = 'Arial'
         p_ident.style.font.size = Pt(11)
 
-        # A. Tujuan Pembelajaran
+        # A. Tujuan
         p_tujuan_head = doc.add_paragraph()
         r_tujuan = p_tujuan_head.add_run("A. Tujuan Pembelajaran")
         r_tujuan.bold = True
@@ -174,14 +175,14 @@ def create_full_docx(data: dict) -> io.BytesIO:
             p.style.font.name = 'Arial'
             p.style.font.size = Pt(11)
 
-        # B. Langkah-Langkah Pembelajaran
+        # B. Langkah Pembelajaran
         p_langkah_head = doc.add_paragraph()
         r_langkah = p_langkah_head.add_run("B. Langkah-Langkah Pembelajaran")
         r_langkah.bold = True
         r_langkah.font.size = Pt(11)
         r_langkah.font.name = 'Arial'
         
-        # 1. Kegiatan Pendahuluan
+        # 1. Pendahuluan
         p_pend = doc.add_paragraph()
         r_pend = p_pend.add_run("1. Kegiatan Pendahuluan")
         r_pend.bold = True
@@ -193,7 +194,7 @@ def create_full_docx(data: dict) -> io.BytesIO:
             p.style.font.name = 'Arial'
             p.style.font.size = Pt(11)
 
-        # 2. Kegiatan Inti
+        # 2. Inti
         p_inti_head = doc.add_paragraph()
         r_inti_head = p_inti_head.add_run("2. Kegiatan Inti")
         r_inti_head.bold = True
@@ -219,7 +220,7 @@ def create_full_docx(data: dict) -> io.BytesIO:
                 r_cells[0].paragraphs[0].runs[0].font.size = Pt(10)
                 r_cells[1].paragraphs[0].runs[0].font.size = Pt(10)
 
-        # 3. Kegiatan Penutup
+        # 3. Penutup
         p_penut = doc.add_paragraph()
         r_penut = p_penut.add_run("\n3. Kegiatan Penutup")
         r_penut.bold = True
@@ -231,7 +232,7 @@ def create_full_docx(data: dict) -> io.BytesIO:
             p.style.font.name = 'Arial'
             p.style.font.size = Pt(11)
 
-        # C. Penilaian Hasil Pembelajaran
+        # C. Penilaian
         p_penilaian_head = doc.add_paragraph()
         r_penilaian = p_penilaian_head.add_run("C. Penilaian Hasil Pembelajaran")
         r_penilaian.bold = True
@@ -278,7 +279,7 @@ def create_full_docx(data: dict) -> io.BytesIO:
     return buffer
 
 # ---------------------------------------------------------
-# Form Input UI
+# Form Input
 # ---------------------------------------------------------
 col1, col2 = st.columns([1, 1])
 
@@ -302,12 +303,12 @@ with col2:
     
     kitab_text_input = ""
     page_range_input = ""
+    
     if metode_input == "📁 Upload File PDF":
         uploaded_pdf = st.file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
         page_range_input = st.text_input(
-            "Rentang Halaman yang Ingin Dianalisis (Opsional):",
-            placeholder="Contoh: 1-10 atau 5, 8, 12-20 (Kosongkan jika semua)",
-            help="Tentukan halaman tertentu pada PDF yang ingin dijadikan bahan RPP/Silabus."
+            "📄 Rentang Halaman yang Ingin Dianalisis (Opsional):",
+            placeholder="Contoh: 1-5 atau 3,5,7-10 (Kosongkan jika semua halaman)"
         )
     else:
         uploaded_pdf = None
@@ -327,13 +328,12 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         if not uploaded_pdf:
             st.error("Harap unggah berkas PDF kitab terlebih dahulu.")
             st.stop()
-        with st.spinner("Membaca dan memproses halaman PDF..."):
-            extracted, selected_count, total_count = extract_text_from_pdf(uploaded_pdf, page_range_input)
+        with st.spinner("Membaca dan menganalisis halaman PDF yang dipilih..."):
+            extracted = extract_text_from_pdf(uploaded_pdf, page_range_input)
             if not extracted.strip():
-                st.error("Teks pada halaman PDF terpilih tidak terbaca/kosong. Pastikan file PDF mengandung teks.")
+                st.error("Teks pada rentang halaman PDF tersebut tidak dapat dibaca atau kosong.")
                 st.stop()
             final_text = extracted
-            st.success(f"Berhasil mengekstrak {selected_count} dari total {total_count} halaman PDF.")
     else:
         if not kitab_text_input.strip():
             st.error("Harap masukkan atau salin teks kitab terlebih dahulu.")
@@ -352,7 +352,7 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         - Nama Kitab: {nama_kitab}
         - Fan Ilmu: {fan_ilmu}
         - Tingkat / Kelas: {tingkat_kelas}
-        - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan dengan materi'}
+        - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan dengan cakupan materi'}
         - Alokasi Waktu per Pertemuan: {alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}
         --- TEKS KITAB ---
         {pdf_text_truncated}
@@ -400,11 +400,11 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
                             "Guru menyampaikan apersepsi serta tujuan pembelajaran untuk Bab Al-Kalam."
                         ],
                         "inti": [
-                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab secara bersama-sama."}},
-                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf."}},
-                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad ke dalam Isim, Fi'il, atau Huruf."}},
-                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas."}},
-                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur pembentuk Kalam."}}
+                            {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri membaca dan mencermati matan Bab Al-Kalam dalam Kitab Matan Al-Ajurrumiyyah secara bersama-sama."}},
+                            {{"aspek": "Critical Thinking", "kegiatan": "Guru memberikan kesempatan kepada santri untuk mendiskusikan perbedaan karakteristik Isim, Fi'il, dan Huruf dalam kalimat."}},
+                            {{"aspek": "Collaboration", "kegiatan": "Santri dibentuk dalam kelompok kecil untuk mengklasifikasikan lafad-lafad dalam contoh kalimat ke dalam kelompok Isim, Fi'il, atau Huruf."}},
+                            {{"aspek": "Communication", "kegiatan": "Masing-masing kelompok menyampaikan hasil klasifikasinya di depan kelas dan kelompok lain memberikan tanggapan."}},
+                            {{"aspek": "Creativity", "kegiatan": "Santri membuat bagan atau peta konsep sederhana tentang unsur-unsur pembentuk Kalam di buku catatan masing-masing."}}
                         ],
                         "penutup": [
                             "Guru bersama santri menyimpulkan poin-poin utama materi Bab Al-Kalam.",
@@ -424,7 +424,7 @@ if st.button("🚀 Buat Silabus & RPP Sekarang", type="primary"):
         
         try:
             response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
+                model="gemini-2.5-flash",
                 contents=prompt
             )
             
@@ -468,7 +468,9 @@ if "result_data" in st.session_state:
         silabus_list = data.get("silabus", [])
         if silabus_list:
             df_silabus = pd.DataFrame(silabus_list)
-            df_silabus.rename(columns={
+            
+            # Pemetaan nama kolom
+            column_mapping = {
                 "ptm": "Ptm",
                 "bab": "Bab / Fasal",
                 "halaman": "Halaman",
@@ -477,7 +479,14 @@ if "result_data" in st.session_state:
                 "capaian": "Capaian Indikator",
                 "indikator": "Indikator Ketercapaian",
                 "evaluasi": "Bentuk Evaluasi"
-            }, inplace=True)
+            }
+            
+            # Hanya ubah kolom yang ada dan belum memiliki nama baru
+            df_silabus.rename(columns={k: v for k, v in column_mapping.items() if k in df_silabus.columns and v not in df_silabus.columns}, inplace=True)
+            
+            # Eliminasi kolom yang terduplikasi secara aman
+            df_silabus = df_silabus.loc[:, ~df_silabus.columns.duplicated()]
+            
             st.dataframe(df_silabus, use_container_width=True, hide_index=True)
             
     with tab_rpp:
@@ -509,7 +518,9 @@ if "result_data" in st.session_state:
             st.markdown("**2. Kegiatan Inti**")
             df_inti = pd.DataFrame(rpp.get("langkah_pembelajaran", {}).get("inti", []))
             if not df_inti.empty:
-                df_inti.rename(columns={"aspek": "Aspek", "kegiatan": "Kegiatan Pembelajaran"}, inplace=True)
+                if "aspek" in df_inti.columns and "kegiatan" in df_inti.columns:
+                    df_inti.rename(columns={"aspek": "Aspek", "kegiatan": "Kegiatan Pembelajaran"}, inplace=True)
+                df_inti = df_inti.loc[:, ~df_inti.columns.duplicated()]
                 st.table(df_inti)
                 
             st.markdown("**3. Kegiatan Penutup**")
