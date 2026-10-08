@@ -307,4 +307,55 @@ def create_single_rpp_docx(data: dict, rpp: dict) -> io.BytesIO:
         p.style.font.name = 'Arial'
         p.style.font.size = Pt(11)
 
-    p_inti_head = doc.add_paragraph
+    p_inti_head = doc.add_paragraph()
+    r_inti_head = p_inti_head.add_run("2. Kegiatan Inti")
+    r_inti_head.bold = True
+    r_inti_head.font.size = Pt(11)
+    r_inti_head.font.name = 'Arial'
+    
+    inti_list = rpp.get("langkah_pembelajaran", {}).get("inti", [])
+    if inti_list:
+        table_inti = doc.add_table(rows=1, cols=2)
+        table_inti.style = 'Table Grid'
+        hdr = table_inti.rows[0].cells
+        hdr[0].text = "Aspek"
+        hdr[1].text = "Kegiatan Pembelajaran"
+        hdr[0].paragraphs[0].runs[0].font.bold = True
+        hdr[1].paragraphs[0].runs[0].font.bold = True
+        hdr[0].paragraphs[0].runs[0].font.size = Pt(10)
+        hdr[1].paragraphs[0].runs[0].font.size = Pt(10)
+        
+        for item in inti_list:
+            r_cells = table_inti.add_row().cells
+            r_cells[0].text = item.get("aspek", "")
+            r_cells[1].text = item.get("kegiatan", "")
+            r_cells[0].paragraphs[0].runs[0].font.size = Pt(10)
+            r_cells[1].paragraphs[0].runs[0].font.size = Pt(10)
+
+    p_penut = doc.add_paragraph()
+    r_penut = p_penut.add_run("\n3. Kegiatan Penutup")
+    r_penut.bold = True
+    r_penut.font.size = Pt(11)
+    r_penut.font.name = 'Arial'
+    
+    for p_item in rpp.get("langkah_pembelajaran", {}).get("penutup", []):
+        p = doc.add_paragraph(f"• {p_item}")
+        p.style.font.name = 'Arial'
+        p.style.font.size = Pt(11)
+
+    p_penilaian_head = doc.add_paragraph()
+    r_penilaian = p_penilaian_head.add_run("C. Penilaian Hasil Pembelajaran")
+    r_penilaian.bold = True
+    r_penilaian.font.size = Pt(11)
+    r_penilaian.font.name = 'Arial'
+    
+    penilaian = rpp.get("penilaian", {})
+    st_p1 = doc.add_paragraph(f"• Penilaian Sikap: {penilaian.get('sikap', '')}")
+    st_p1.style.font.name = 'Arial'
+    st_p1.style.font.size = Pt(11)
+    
+    st_p2 = doc.add_paragraph(f"• Penilaian Pengetahuan: {penilaian.get('pengetahuan', '')}")
+    st_p2.style.font.name = 'Arial'
+    st_p2.style.font.size = Pt(11)
+    
+    st_p3 = doc.add_paragraph(f"• Penilaian Keterampilan:
