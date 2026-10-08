@@ -213,6 +213,62 @@ def create_silabus_docx(data: dict) -> io.BytesIO:
     return buffer
 
 # ---------------------------------------------------------
+# Fungsi Helper: Membuat Dokumen Word (.docx) untuk Jurnal Harian KBM
+# ---------------------------------------------------------
+def create_jurnal_docx(data: dict) -> io.BytesIO:
+    doc = Document()
+    
+    p_lembaga = doc.add_paragraph()
+    p_lembaga.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_inst = p_lembaga.add_run("THE RUFIDZ INDONESIA\n")
+    run_inst.bold = True
+    run_inst.font.size = Pt(14)
+    run_inst.font.name = 'Arial'
+    
+    fan_text = data.get('fan_ilmu', 'SHARAF').upper()
+    kitab_text = data.get('nama_kitab', '')
+    run_title = p_lembaga.add_run(f"JURNAL PEMBELAJARAN {fan_text} ({kitab_text})\nSEMESTER GANJIL / T.A 2026/2027")
+    run_title.bold = True
+    run_title.font.size = Pt(11)
+    run_title.font.name = 'Arial'
+    
+    doc.add_paragraph("\n")
+
+    silabus_items = data.get("silabus", [])
+    if silabus_items:
+        table = doc.add_table(rows=1, cols=7)
+        table.style = 'Table Grid'
+        headers = ["MATERI POKOK", "ALOKASI WAKTU", "Tanggal", "NAMA PENGAJAR/PENGGANTI", "CATATAN MATERI (Diisi jika diperlukan)", "TTD", "Keterangan"]
+        
+        hdr_cells = table.rows[0].cells
+        for i, h_text in enumerate(headers):
+            hdr_cells[i].text = h_text
+            hdr_cells[i].paragraphs[0].runs[0].font.bold = True
+            hdr_cells[i].paragraphs[0].runs[0].font.size = Pt(9)
+            hdr_cells[i].paragraphs[0].runs[0].font.name = 'Arial'
+
+        for item in silabus_items:
+            row_cells = table.add_row().cells
+            row_cells[0].text = str(item.get("bab", ""))
+            row_cells[1].text = str(item.get("alokasi_waktu", ""))
+            row_cells[2].text = "......./....../2026"
+            row_cells[3].text = ""
+            row_cells[4].text = ""
+            row_cells[5].text = ""
+            row_cells[6].text = ""
+            
+            for cell in row_cells:
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.font.size = Pt(9)
+                        run.font.name = 'Arial'
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+# ---------------------------------------------------------
 # Fungsi Helper: Format Dokumen Word (.docx) untuk RPP Tunggal
 # ---------------------------------------------------------
 def create_single_rpp_docx(data: dict, rpp: dict) -> io.BytesIO:
@@ -411,7 +467,7 @@ if metode_input == "📄 Upload Silabus .docx":
                 
                 st.session_state["result_data"] = parsed_data
                 st.session_state["rpp_cache"] = {}
-                st.success("✅ Silabus berhasil dimuat dari file Word! Silakan cek tab RPP di bawah.")
+                st.success("✅ Silabus berhasil dimuat dari file Word! Silakan cek tab di bawah.")
             except Exception as docx_err:
                 st.error(f"Gagal membaca file .docx: {docx_err}")
 else:
@@ -524,7 +580,7 @@ else:
                         st.text(response.text)
 
 # ---------------------------------------------------------
-# Tampilan Hasil & Generator RPP Per Pertemuan
+# Tampilan Hasil & Pilihan Tab
 # ---------------------------------------------------------
 if "result_data" in st.session_state:
     data = st.session_state["result_data"]
@@ -532,7 +588,11 @@ if "result_data" in st.session_state:
     st.markdown("---")
     st.header(f"📖 Kurikulum: {data.get('nama_kitab', '')}")
     
-    tab_silabus, tab_rpp = st.tabs(["📑 Silabus Pembelajaran", "📝 Generator RPP Per Pertemuan"])
+    tab_silabus, tab_jurnal, tab_rpp = st.tabs([
+        "📑 Silabus Pembelajaran", 
+        "📊 Jurnal Pembelajaran KBM", 
+        "📝 Generator RPP Per Pertemuan"
+    ])
     
     with tab_silabus:
         silabus_list = data.get("silabus", [])
@@ -553,6 +613,32 @@ if "result_data" in st.session_state:
                 label="📥 Download Dokumen Silabus (.docx)",
                 data=silabus_docx_buffer,
                 file_name=f"Silabus_{data.get('nama_kitab','Kitab').replace(' ', '_')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+            
+    with tab_jurnal:
+        st.markdown("### Preview Jurnal Mengajar KBM")
+        st.caption("Jurnal harian pengajar disusun secara otomatis berdasarkan daftar materi silabus.")
+        
+        silabus_list = data.get("silabus", [])
+        if silabus_list:
+            df_jurnal = pd.DataFrame([{
+                "Materi Pokok": item.get("bab", ""),
+                "Alokasi Waktu": item.get("alokasi_waktu", ""),
+                "Tanggal": "......./....../2026",
+                "Nama Pengajar/Pengganti": "",
+                "Catatan Materi": "",
+                "TTD": "",
+                "Keterangan": ""
+            } for item in silabus_list])
+            
+            st.dataframe(df_jurnal, use_container_width=True, hide_index=True)
+            
+            jurnal_docx_buffer = create_jurnal_docx(data)
+            st.download_button(
+                label="📥 Download Jurnal Mengajar (.docx)",
+                data=jurnal_docx_buffer,
+                file_name=f"Jurnal_Mengajar_{data.get('nama_kitab','Kitab').replace(' ', '_')}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
             
