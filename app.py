@@ -555,7 +555,7 @@ else:
                     st.success("✅ Silabus berhasil dibuat dari teks utuh! Silakan lihat tab di bawah.")
                 except Exception as json_err:
                     st.error(f"Gagal melakukan parsing data JSON dari AI: {json_err}")
-                    with st.expander("🔍 Lihat Mentah Respons AI (untuk debugging)"):
+                    with st.expander("🔍 Lihat Mentah Respons AI (for debugging)"):
                         st.text(response.text)
 
 # ---------------------------------------------------------
@@ -586,6 +586,77 @@ if "result_data" in st.session_state:
             df_silabus = df_silabus.loc[:, ~df_silabus.columns.duplicated()]
             st.dataframe(df_silabus, use_container_width=True, hide_index=True)
             
+            # --- FITUR TAMBAHAN: REVISI / PERBAIKAN SILABUS DENGAN PROMPT USER ---
+            st.markdown("---")
+            st.markdown("### 🛠️ Perbaiki atau Sesuaikan Silabus dengan Perintah AI")
+            st.caption("Ketik perintah khusus jika Anda ingin merevisi silabus di atas (contoh: *'Pecah pertemuan 2 menjadi dua sesi khusus praktik tashrif'* atau *'Sesuaikan metode agar lebih interaktif'*).")
+            
+            correction_prompt = st.text_area(
+                "Instruksi / Perintah Perbaikan:",
+                placeholder="Tulis instruksi revisi silabus di sini...",
+                key="silabus_correction_input"
+            )
+            
+            if st.button("✨ Terapkan Perbaikan Silabus", type="primary"):
+                if not correction_prompt.strip():
+                    st.warning("Harap masukkan instruksi atau perintah perbaikan terlebih dahulu.")
+                else:
+                    with st.spinner("AI sedang merevisi silabus berdasarkan instruksi Anda..."):
+                        fix_prompt = f"""
+                        Anda adalah pakar kurikulum madrasah/pesantren.
+                        Berikut adalah data silabus saat ini dalam format JSON:
+                        {json.dumps(data, ensure_ascii=False, indent=2)}
+
+                        User memberikan instruksi/perintah perbaikan berikut untuk silabus di atas:
+                        "{correction_prompt}"
+
+                        Terapkan perbaikan tersebut secara cermat dan proporsional. 
+                        Keluarkan respons HANYA dalam bentuk JSON valid dengan struktur yang sama persis seperti sebelumnya tanpa teks lain:
+                        {{
+                            "nama_kitab": "{data.get('nama_kitab', '')}",
+                            "fan_ilmu": "{data.get('fan_ilmu', '')}",
+                            "tingkat_kelas": "{data.get('tingkat_kelas', '')}",
+                            "total_pertemuan": "{data.get('total_pertemuan', '')}",
+                            "silabus": [
+                                {{
+                                    "ptm": 1,
+                                    "bab": "...",
+                                    "halaman": "...",
+                                    "alokasi_waktu": "...",
+                                    "metode": "...",
+                                    "capaian": "...",
+                                    "indikator": "...",
+                                    "evaluasi": "..."
+                                }}
+                            ]
+                        }}
+                        """
+                        try:
+                            fix_response = client.models.generate_content(
+                                model="gemini-3.6-flash",
+                                contents=fix_prompt,
+                                config=types.GenerateContentConfig(max_output_tokens=65536, temperature=0.7)
+                            )
+                            raw_fix = fix_response.text.strip()
+                            if "```json" in raw_fix:
+                                raw_fix = raw_fix.split("```json")[1].split("```")[0].strip()
+                            elif "```" in raw_fix:
+                                raw_fix = raw_fix.split("```")[1].split("```")[0].strip()
+
+                            start_idx = raw_fix.find("{")
+                            end_idx = raw_fix.rfind("}")
+                            if start_idx != -1 and end_idx != -1:
+                                raw_fix = raw_fix[start_idx : end_idx + 1]
+
+                            updated_data = json.loads(raw_fix)
+                            st.session_state["result_data"] = updated_data
+                            st.session_state["rpp_cache"] = {}
+                            st.success("✅ Silabus berhasil diperbarui sesuai instruksi Anda!")
+                            st.rerun()
+                        except Exception as fix_err:
+                            st.error(f"Gagal merevisi silabus: {fix_err}")
+            
+            st.markdown("---")
             silabus_docx_buffer = create_silabus_docx(data)
             st.download_button(
                 label="📥 Download Dokumen Silabus (.docx)",
