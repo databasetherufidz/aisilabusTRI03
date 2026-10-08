@@ -358,4 +358,383 @@ def create_single_rpp_docx(data: dict, rpp: dict) -> io.BytesIO:
     st_p2.style.font.name = 'Arial'
     st_p2.style.font.size = Pt(11)
     
-    st_p3 = doc.add_paragraph(f"• Penilaian Keterampilan:
+    st_p3 = doc.add_paragraph(f"• Penilaian Keterampilan: {penilaian.get('keterampilan', '')}")
+    st_p3.style.font.name = 'Arial'
+    st_p3.style.font.size = Pt(11)
+
+    doc.add_paragraph("\n")
+    ttd_table = doc.add_table(rows=2, cols=2)
+    ttd_cells_0 = ttd_table.rows[0].cells
+    ttd_cells_1 = ttd_table.rows[1].cells
+    
+    ttd_cells_0[0].text = "Mengetahui,\nKepala Sekolah"
+    ttd_cells_0[1].text = "\nPengampu Mapel"
+    ttd_cells_1[0].text = "\n\n( Mudir Sekolah )"
+    ttd_cells_1[1].text = "\n\n( Ustadz Pengampu )"
+    
+    for row in ttd_table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    run.font.name = 'Arial'
+                    run.font.size = Pt(11)
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+# ---------------------------------------------------------
+# Form Input
+# ---------------------------------------------------------
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    nama_kitab = st.text_input("Nama Kitab / Pelajaran:", placeholder="Contoh: Al-Qawaidus Sharfiyyah")
+    fan_ilmu = st.text_input("Fan Ilmu:", placeholder="Contoh: Sharaf")
+    tingkat_kelas = st.text_input("Tingkat / Kelas:", placeholder="Contoh: Kelas 7")
+    
+    col_ptm, col_waktu = st.columns(2)
+    with col_ptm:
+        total_pertemuan_input = st.text_input("Total Pertemuan:", placeholder="Contoh: 134 Pertemuan")
+    with col_waktu:
+        alokasi_waktu_input = st.text_input("Alokasi Waktu per Pertemuan:", placeholder="Contoh: 2 x 45 Menit")
+
+with col2:
+    metode_input = st.radio(
+        "Pilih Sumber Masukan:",
+        ["📁 Upload PDF Kitab", "✍️ Ketik / Paste Teks", "📄 Upload Silabus .docx"],
+        horizontal=True
+    )
+    
+    uploaded_pdf = None
+    kitab_text_input = ""
+    page_range_input = ""
+    uploaded_docx_silabus = None
+    
+    if metode_input == "📁 Upload PDF Kitab":
+        uploaded_pdf = st.file_uploader("Unggah PDF Kitab/Bab (Max 10MB):", type=["pdf"])
+        page_range_input = st.text_input(
+            "📄 Rentang Halaman yang Ingin Dianalisis (Opsional):",
+            placeholder="Contoh: 1-30 (Kosongkan jika semua halaman)"
+        )
+    elif metode_input == "✍️ Ketik / Paste Teks":
+        kitab_text_input = st.text_area(
+            "Masukkan / Paste Teks Kitab di Sini:",
+            placeholder="Salin dan tempelkan teks materi/kitab di sini...",
+            height=200
+        )
+    else:
+        uploaded_docx_silabus = st.file_uploader("Unggah File Silabus Berformat .docx:", type=["docx"])
+
+if "rpp_cache" not in st.session_state:
+    st.session_state["rpp_cache"] = {}
+
+# ---------------------------------------------------------
+# Tombol Aksi Pembuatan Silabus / Load Silabus Word
+# ---------------------------------------------------------
+if metode_input == "📄 Upload Silabus .docx":
+    if st.button("📂 Load Data Silabus dari Dokumen .docx", type="primary"):
+        if not uploaded_docx_silabus:
+            st.error("Harap unggah file Silabus berformat .docx terlebih dahulu.")
+        else:
+            try:
+                parsed_data = parse_silabus_from_docx(uploaded_docx_silabus)
+                parsed_data["nama_kitab"] = nama_kitab if nama_kitab else parsed_data["nama_kitab"]
+                parsed_data["fan_ilmu"] = fan_ilmu if fan_ilmu else parsed_data["fan_ilmu"]
+                parsed_data["tingkat_kelas"] = tingkat_kelas if tingkat_kelas else parsed_data["tingkat_kelas"]
+                
+                st.session_state["result_data"] = parsed_data
+                st.session_state["rpp_cache"] = {}
+                st.success("✅ Silabus berhasil dimuat dari file Word! Silakan cek tab di bawah.")
+            except Exception as docx_err:
+                st.error(f"Gagal membaca file .docx: {docx_err}")
+else:
+    if st.button("🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu", type="primary"):
+        final_text = ""
+        if metode_input == "📁 Upload PDF Kitab":
+            if not uploaded_pdf:
+                st.error("Harap unggah berkas PDF kitab terlebih dahulu.")
+                st.stop()
+            with st.spinner("Membaca dan menganalisis seluruh halaman PDF..."):
+                final_text = extract_text_from_pdf(uploaded_pdf, page_range_input)
+                if not final_text.strip():
+                    st.error("Teks pada PDF tidak terbaca.")
+                    st.stop()
+        else:
+            if not kitab_text_input.strip():
+                st.error("Harap masukkan teks kitab terlebih dahulu.")
+                st.stop()
+            final_text = kitab_text_input
+
+        st.session_state["pdf_text"] = final_text
+        st.session_state["nama_kitab"] = nama_kitab
+        st.session_state["fan_ilmu"] = fan_ilmu
+        st.session_state["tingkat_kelas"] = tingkat_kelas
+        st.session_state["total_pertemuan"] = total_pertemuan_input
+        st.session_state["alokasi_waktu"] = alokasi_waktu_input
+        st.session_state["rpp_cache"] = {}
+
+        with st.spinner("Gemini AI sedang menyusun Silabus dari seluruh teks kitab..."):
+            prompt = f"""
+            Anda adalah seorang pakar kurikulum madrasah/pesantren.
+            Buatkan pemetaan Silabus secara lengkap dan proporsional untuk seluruh pertemuan dari teks kitab di bawah ini.
+            
+            --- DETAIL INPUT ---
+            - Nama Kitab: {nama_kitab}
+            - Fan Ilmu: {fan_ilmu}
+            - Tingkat / Kelas: {tingkat_kelas}
+            - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan'}
+            - Alokasi Waktu per Pertemuan: {alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}
+            --- TEKS KITAB ---
+            {final_text}
+            --------------------
+            
+            Keluarkan respons HANYA dalam bentuk JSON valid dengan struktur berikut tanpa teks lain:
+            {{
+                "nama_kitab": "{nama_kitab}",
+                "fan_ilmu": "{fan_ilmu}",
+                "tingkat_kelas": "{tingkat_kelas}",
+                "total_pertemuan": "{total_pertemuan_input}",
+                "silabus": [
+                    {{
+                        "ptm": 1,
+                        "bab": "Nama bab/fasal dari teks",
+                        "halaman": "Rentang halaman",
+                        "alokasi_waktu": "{alokasi_waktu_input}",
+                        "metode": "Metode pembelajaran",
+                        "capaian": "Capaian indikator",
+                        "indikator": "Indikator ketercapaian",
+                        "evaluasi": "Bentuk evaluasi"
+                    }}
+                ]
+            }}
+            """
+
+            import time
+            max_retries = 3
+            retry_delay = 2
+            success = False
+            response = None
+
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=65536, temperature=0.7
+                        ),
+                    )
+                    success = True
+                    break
+                except Exception as e:
+                    if "503" in str(e) and attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        st.error(f"Gagal memproses AI / JSON: {str(e)}")
+                        break
+
+            if success and response:
+                try:
+                    raw_text = response.text.strip()
+                    if "```json" in raw_text:
+                        raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+                    elif "```" in raw_text:
+                        raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+                    start_idx = raw_text.find("{")
+                    end_idx = raw_text.rfind("}")
+                    if start_idx != -1 and end_idx != -1:
+                        raw_text = raw_text[start_idx : end_idx + 1]
+
+                    data = json.loads(raw_text)
+                    st.session_state["result_data"] = data
+                    st.success("✅ Silabus berhasil dibuat dari teks utuh! Silakan lihat tab di bawah.")
+                except Exception as json_err:
+                    st.error(f"Gagal melakukan parsing data JSON dari AI: {json_err}")
+                    with st.expander("🔍 Lihat Mentah Respons AI (untuk debugging)"):
+                        st.text(response.text)
+
+# ---------------------------------------------------------
+# Tampilan Hasil & Pilihan Tab
+# ---------------------------------------------------------
+if "result_data" in st.session_state:
+    data = st.session_state["result_data"]
+    
+    st.markdown("---")
+    st.header(f"📖 Kurikulum: {data.get('nama_kitab', '')}")
+    
+    tab_silabus, tab_jurnal, tab_rpp = st.tabs([
+        "📑 Silabus Pembelajaran", 
+        "📊 Jurnal Pembelajaran KBM (Excel)", 
+        "📝 Generator RPP Per Pertemuan"
+    ])
+    
+    with tab_silabus:
+        silabus_list = data.get("silabus", [])
+        if silabus_list:
+            df_silabus = pd.DataFrame(silabus_list)
+            column_mapping = {
+                "ptm": "Ptm", "bab": "Bab / Fasal", "halaman": "Halaman",
+                "alokasi_waktu": "Alokasi Waktu", "metode": "Metode Klasik",
+                "capaian": "Capaian Indikator", "indikator": "Indikator Ketercapaian", "evaluasi": "Bentuk Evaluasi"
+            }
+            df_silabus.rename(columns={k: v for k, v in column_mapping.items() if k in df_silabus.columns}, inplace=True)
+            df_silabus = df_silabus.loc[:, ~df_silabus.columns.duplicated()]
+            st.dataframe(df_silabus, use_container_width=True, hide_index=True)
+            
+            silabus_docx_buffer = create_silabus_docx(data)
+            st.download_button(
+                label="📥 Download Dokumen Silabus (.docx)",
+                data=silabus_docx_buffer,
+                file_name=f"Silabus_{data.get('nama_kitab','Kitab').replace(' ', '_')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+
+    with tab_jurnal:
+        st.markdown("### Preview Jurnal Pembelajaran KBM (Excel)")
+        st.caption("Tabel jurnal harian pengajar disesuaikan dengan draf Excel Anda.")
+        
+        silabus_list = data.get("silabus", [])
+        if silabus_list:
+            df_jurnal = pd.DataFrame([{
+                "MATERI POKOK": item.get("bab", ""),
+                "ALOKASI WAKTU": item.get("alokasi_waktu", ""),
+                "Tanggal": "......./....../2026",
+                "NAMA PENGAJAR/PENGGANTI": "",
+                "CATATAN MATERI (Diisi jika diperlukan)": "",
+                "TTD": "",
+                "Keterangan": ""
+            } for item in silabus_list])
+            
+            st.dataframe(df_jurnal, use_container_width=True, hide_index=True)
+            
+            jurnal_excel_buffer = create_jurnal_excel(data)
+            st.download_button(
+                label="📥 Download Jurnal Mengajar (.xlsx)",
+                data=jurnal_excel_buffer,
+                file_name=f"Jurnal_Mengajar_{data.get('nama_kitab','Kitab').replace(' ', '_')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+    with tab_rpp:
+        silabus_items = data.get("silabus", [])
+        if silabus_items:
+            ptm_options = [f"Pertemuan Ke-{item.get('ptm')} ({item.get('bab', 'Materi')})" for item in silabus_items]
+            selected_ptm_label = st.selectbox("Pilih Pertemuan untuk Generate RPP:", ptm_options)
+            
+            selected_idx = ptm_options.index(selected_ptm_label)
+            selected_item = silabus_items[selected_idx]
+            ptm_num = selected_item.get("ptm")
+            
+            if st.button(f"✨ Buat RPP untuk Pertemuan Ke-{ptm_num}", type="secondary"):
+                with st.spinner(f"AI sedang merancang RPP khusus untuk Pertemuan Ke-{ptm_num}..."):
+                    rpp_prompt = f"""
+                    Anda adalah pakar kurikulum pesantren. Buatkan SATU Rencana Pelaksanaan Pembelajaran (RPP) yang sangat detail untuk Pertemuan ke-{ptm_num} berdasarkan data silabus berikut:
+                    - Bab/Materi: {selected_item.get('bab')}
+                    - Halaman: {selected_item.get('halaman')}
+                    - Capaian: {selected_item.get('capaian')}
+                    - Indikator: {selected_item.get('indikator')}
+                    - Alokasi Waktu: {selected_item.get('alokasi_waktu')}
+                    
+                    Gunakan teks sumber kitab jika relevan. Berikan keluaran HANYA dalam format JSON valid berikut tanpa teks lain:
+                    {{
+                        "ptm": {ptm_num},
+                        "sekolah": "MDT / Pesantren Rufidz Tahfidz & Diniyah Indonesia",
+                        "materi_pokok": "{selected_item.get('bab')}",
+                        "alokasi_waktu": "{selected_item.get('alokasi_waktu')}",
+                        "tujuan_pembelajaran": [
+                            "Tujuan 1...",
+                            "Tujuan 2..."
+                        ],
+                        "langkah_pembelajaran": {{
+                            "pendahuluan": [
+                                "Guru membuka pembelajaran dengan salam dan doa.",
+                                "Guru menyampaikan apersepsi."
+                            ],
+                            "inti": [
+                                {{"aspek": "Kegiatan Literasi", "kegiatan": "Santri menyimak..."}},
+                                {{"aspek": "Critical Thinking", "kegiatan": "Santri menganalisis..."}},
+                                {{"aspek": "Collaboration", "kegiatan": "Diskusi kelompok..."}},
+                                {{"aspek": "Communication", "kegiatan": "Presentasi hasil..."}},
+                                {{"aspek": "Creativity", "kegiatan": "Membuat kesimpulan..."}}
+                            ],
+                            "penutup": [
+                                "Guru bersama santri menyimpulkan materi.",
+                                "Doa penutup majelis."
+                            ]
+                        }},
+                        "penilaian": {{
+                            "sikap": "Observasi keaktifan dan kedisiplinan santri.",
+                            "pengetahuan": "Tes lisan / Tanya jawab wazan/kaidah.",
+                            "keterampilan": "Praktik membaca teks dan tashrif."
+                        }}
+                    }}
+                    """
+                    try:
+                        rpp_response = client.models.generate_content(
+                            model="gemini-3.6-flash",
+                            contents=rpp_prompt,
+                            config=types.GenerateContentConfig(max_output_tokens=65536, temperature=0.7)
+                        )
+                        raw_rpp = rpp_response.text.strip()
+                        if raw_rpp.startswith("```"):
+                            lines = raw_rpp.splitlines()
+                            if lines[0].startswith("```"): lines = lines[1:]
+                            if lines and lines[-1].startswith("```"): lines = lines[:-1]
+                            raw_rpp = "\n".join(lines).strip()
+                        
+                        rpp_data = json.loads(raw_rpp)
+                        st.session_state["rpp_cache"][ptm_num] = rpp_data
+                        st.success(f"✅ RPP Pertemuan ke-{ptm_num} berhasil dibuat!")
+                    except Exception as e:
+                        st.error(f"Gagal generate RPP: {str(e)}")
+            
+            if ptm_num in st.session_state["rpp_cache"]:
+                rpp = st.session_state["rpp_cache"][ptm_num]
+                
+                st.markdown("---")
+                st.markdown("### THE RUFIDZ INDONESIA")
+                st.markdown("#### RENCANA PELAKSANAAN PEMBELAJARAN (RPP)")
+                st.markdown(f"**Sekolah**: {rpp.get('sekolah', '-')}")
+                st.markdown(f"**Mata Pelajaran**: {data.get('fan_ilmu', '')} ({data.get('nama_kitab', '')})")
+                st.markdown(f"**Kelas / Tahap**: {data.get('tingkat_kelas', '-')}")
+                st.markdown(f"**Materi Pokok**: {rpp.get('materi_pokok', '-')}")
+                st.markdown(f"**Alokasi Waktu**: {rpp.get('alokasi_waktu', '-')}")
+                
+                st.markdown("#### A. Tujuan Pembelajaran")
+                for t in rpp.get("tujuan_pembelajaran", []):
+                    st.markdown(f"• {t}")
+                    
+                st.markdown("#### B. Langkah-Langkah Pembelajaran")
+                st.markdown("**1. Kegiatan Pendahuluan**")
+                for p_item in rpp.get("langkah_pembelajaran", {}).get("pendahuluan", []):
+                    st.markdown(f"• {p_item}")
+                    
+                st.markdown("**2. Kegiatan Inti**")
+                df_inti = pd.DataFrame(rpp.get("langkah_pembelajaran", {}).get("inti", []))
+                if not df_inti.empty:
+                    if "aspek" in df_inti.columns and "kegiatan" in df_inti.columns:
+                        df_inti.rename(columns={"aspek": "Aspek", "kegiatan": "Kegiatan Pembelajaran"}, inplace=True)
+                    st.table(df_inti)
+                    
+                st.markdown("**3. Kegiatan Penutup**")
+                for p_item in rpp.get("langkah_pembelajaran", {}).get("penutup", []):
+                    st.markdown(f"• {p_item}")
+                    
+                st.markdown("#### C. Penilaian Hasil Pembelajaran")
+                pen = rpp.get("penilaian", {})
+                st.write(f"• **Penilaian Sikap**: {pen.get('sikap')}")
+                st.write(f"• **Penilaian Pengetahuan**: {pen.get('pengetahuan')}")
+                st.write(f"• **Penilaian Keterampilan**: {pen.get('keterampilan')}")
+                
+                docx_buffer = create_single_rpp_docx(data, rpp)
+                st.download_button(
+                    label=f"📥 Download RPP Pertemuan ke-{ptm_num} (.docx)",
+                    data=docx_buffer,
+                    file_name=f"RPP_Pertemuan_{ptm_num}_{data.get('nama_kitab','').replace(' ', '_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
