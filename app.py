@@ -459,3 +459,93 @@ if metode_input == "📄 Upload Silabus .docx":
                 parsed_data["nama_kitab"] = nama_kitab if nama_kitab else parsed_data["nama_kitab"]
                 parsed_data["fan_ilmu"] = fan_ilmu if fan_ilmu else parsed_data["fan_ilmu"]
                 parsed_data["tingkat_kelas"] = tingkat_kelas if tingkat_kelas else parsed_data["tingkat_kelas"]
+                
+                st.session_state["result_data"] = parsed_data
+                st.session_state["rpp_cache"] = {}
+                st.success("✅ Silabus berhasil dimuat dari file Word! Silakan cek tab di bawah.")
+            except Exception as docx_err:
+                st.error(f"Gagal membaca file .docx: {docx_err}")
+else:
+    btn_label = "📂 1. Buat Silabus dari Dokumen" if metode_input == "📁 Upload Dokumen Kitab (PDF/Docx)" else "🚀 1. Buat Silabus Pembelajaran Terlebih Dahulu"
+    if st.button(btn_label, type="primary"):
+        final_text = ""
+        if metode_input == "📁 Upload Dokumen Kitab (PDF/Docx)":
+            if not uploaded_doc_kitab:
+                st.error("Harap unggah berkas dokumen kitab (PDF atau Docx) terlebih dahulu.")
+                st.stop()
+            with st.spinner("Membaca dan menganalisis dokumen kitab..."):
+                file_extension = uploaded_doc_kitab.name.split(".")[-1].lower()
+                if file_extension == "pdf":
+                    final_text = extract_text_from_pdf(uploaded_doc_kitab, page_range_input)
+                elif file_extension == "docx":
+                    final_text = extract_text_from_docx(uploaded_doc_kitab)
+                
+                if not final_text.strip():
+                    st.error("Teks pada dokumen tidak terbaca.")
+                    st.stop()
+        else:
+            if not kitab_text_input.strip():
+                st.error("Harap masukkan teks kitab terlebih dahulu.")
+                st.stop()
+            final_text = kitab_text_input
+
+        st.session_state["pdf_text"] = final_text
+        st.session_state["nama_kitab"] = nama_kitab
+        st.session_state["fan_ilmu"] = fan_ilmu
+        st.session_state["tingkat_kelas"] = tingkat_kelas
+        st.session_state["total_pertemuan"] = total_pertemuan_input
+        st.session_state["alokasi_waktu"] = alokasi_waktu_input
+        st.session_state["rpp_cache"] = {}
+
+        with st.spinner("Gemini AI sedang menyusun Silabus dari seluruh teks kitab..."):
+            prompt = f"""
+            Anda adalah seorang pakar kurikulum madrasah/pesantren.
+            Buatkan pemetaan Silabus secara lengkap dan proporsional untuk seluruh pertemuan dari teks kitab di bawah ini.
+            
+            --- DETAIL INPUT ---
+            - Nama Kitab: {nama_kitab}
+            - Fan Ilmu: {fan_ilmu}
+            - Tingkat / Kelas: {tingkat_kelas}
+            - Total Pertemuan: {total_pertemuan_input if total_pertemuan_input else 'Sesuaikan'}
+            - Alokasi Waktu per Pertemuan: {alokasi_waktu_input if alokasi_waktu_input else '2 x 45 Menit'}
+            --- TEKS KITAB ---
+            {final_text}
+            --------------------
+            
+            Keluarkan respons HANYA dalam bentuk JSON valid dengan struktur berikut tanpa teks lain:
+            {{
+                "nama_kitab": "{nama_kitab}",
+                "fan_ilmu": "{fan_ilmu}",
+                "tingkat_kelas": "{tingkat_kelas}",
+                "total_pertemuan": "{total_pertemuan_input}",
+                "silabus": [
+                    {{
+                        "ptm": 1,
+                        "bab": "Nama bab/fasal dari teks",
+                        "halaman": "Rentang halaman",
+                        "alokasi_waktu": "{alokasi_waktu_input}",
+                        "metode": "Metode pembelajaran",
+                        "capaian": "Capaian indikator",
+                        "indikator": "Indikator ketercapaian",
+                        "evaluasi": "Bentuk evaluasi"
+                    }}
+                ]
+            }}
+            """
+
+            import time
+            max_retries = 3
+            retry_delay = 2
+            success = False
+            response = None
+
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=65536, temperature=0.7
+                        ),
+                    )
+                    success = True
